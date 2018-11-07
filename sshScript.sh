@@ -22,13 +22,30 @@
 
 #Implementation
 
-
+#Start of Configuration
+###############################################################################
 #init State
 #Define Repos Location (Path)
-Path[1]='/home/karimothman/CapacityRequest/Node1';
-Path[2]='/home/karimothman/CapacityRequest/Node2';
-Path[3]='/home/karimothman/CapacityRequest/Node3';
-Path[4]='/home/karimothman/CapacityRequest/Node4';
+Path[1]='/home/karimothman/CDRs';
+Path[2]='/home/karimothman/CDRs';
+Path[3]='/home/karimothman/CDRs';
+Path[4]='/home/karimothman/CDRs';
+#Define IPs
+IP[1]="10.0.2.6";
+IP[2]="10.0.2.7";
+IP[3]="10.0.2.6";
+IP[4]="10.0.2.7";
+
+#Define NodeName
+NodeName[1]="Node1";
+NodeName[2]="Node2";
+NodeName[3]="Node3";
+NodeName[4]="Node4";
+
+UserName="karimothman";
+##########################################################################################
+
+
 
 #Part 1
 #Check If persistant variable/file exist (Contains latest CDRs that haven't processed yet)
@@ -61,18 +78,19 @@ fi
 #Loop on Nodes/ Path array
 for index in "${!Path[@]}"
 do
-    echo "$index"
     # If CDR/file still the latest we shouldn't process it as it may not been completed yet --> Data is incompleted
     # else
         #We should operate on n-1 CDR/file and update our local persistant variable/file with latest CDR name
     CDRfilePathOnSlaveNodes=${Path[$index]}
-    LatestMOdifiedFileName=`cd $CDRfilePathOnSlaveNodes && find -name "*.cdr" -type f -printf "%Ts %p\n" | sort -n | tail -1 | sed -r -e 's/^[0-9]+ .//'`
+    LatestMOdifiedFileName=`ssh $UserName@${IP[$index]} bash -s  < FindLatest.sh`
     if [ "$LatestMOdifiedFileName" = "${CDRName[$index]}" ] #If CDR still the latest
     then
         #CDR still the latest --> Do no thing
         echo ""
     else
-        if [ ! -f "$CDRfilePathOnSlaveNodes${CDRName[$index]}" ] #Note that at first run our persistant local file won't have any CDR to operate on --> Lw el local file fady .. 2aw el CDR msh mawgooda  3al slave machine 5alas
+        #Copy Remote CDR file into Local temp file
+        scp ${IP[$index]}:$CDRfilePathOnSlaveNodes${CDRName[$index]} ./Temp.cdr
+        if [ ! -f "./Temp.cdr" ] #Note that at first run our persistant local file won't have any CDR to operate on --> Lw el local file fady .. 2aw el CDR msh mawgooda  3al slave machine 5alas
         then
         
             #Access the first line of Local persistant file and overwrite it with the LatestMOdifiedFileName then write error in logs
@@ -87,12 +105,11 @@ do
                 FirstField=`echo "$var" | grep -oP '^([^,]+)'`  #First word before comma ^([^,]+)
                 SecondField=`echo "$var" | grep -oP '([^,]+)$'` #Last word after comman [^,]+)$
 
-                #Insert in DB
-                echo "FirstField=$FirstField SecondField=$SecondField"  >> LocalDB.txt
-                
-                done < "$CDRfilePathOnSlaveNodes${CDRName[$index]}"
+                #Create File with node name followed by CDR
+                echo "$FirstField,$SecondField"  >> ${NodeName[$index]}${CDRName[$index]////_} #////_ to remove slash from file name and replace it with _
+                done < "./Temp.cdr"
 
-                
+                rm  ./Temp.cdr
             #Update our local persistant variable/file 
             sed -i "${index}s/.*/${LatestMOdifiedFileName////\\/}/" $file  # Will replace first line in file (1s/.*/) with latest CDR name ... ////\\/ this pattern to escape directory salsh /
         fi
